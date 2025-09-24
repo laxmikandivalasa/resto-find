@@ -44,6 +44,36 @@ app.get("/api/restaurant/search", async (req, res) => {
   }
 });
 
+// Filter restaurants (must come before /:id)
+app.get("/api/restaurant/filter", async (req, res) => {
+  try {
+    const { city, cuisine, minCost, maxCost, minRating } = req.query;
+
+    let filter = {};
+
+    if (city) {
+      filter["location.city"] = new RegExp(city, "i");
+    }
+    if (cuisine) {
+      filter.cuisines = { $elemMatch: { $regex: new RegExp(cuisine, "i") } };
+    }
+    if (minCost || maxCost) {
+      filter.average_cost_for_two = {};
+      if (minCost) filter.average_cost_for_two.$gte = parseInt(minCost);
+      if (maxCost) filter.average_cost_for_two.$lte = parseInt(maxCost);
+    }
+    if (minRating) {
+      filter.aggregate_rating = { $gte: parseFloat(minRating) };
+    }
+
+    const restaurants = await Restaurant.find(filter).limit(50);
+    res.json(restaurants);
+  } catch (err) {
+    res.status(500).json({ message: "Server Error", error: err.message });
+  }
+});
+
+
 // Get restaurant by MongoDB _id
 app.get("/api/restaurant/:id", async (req, res) => {
   try {

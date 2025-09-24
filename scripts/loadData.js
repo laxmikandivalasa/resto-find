@@ -59,14 +59,17 @@ async function loadData() {
         name: r.name || "",
         url: r.url || "",
         location: {
-          address: r.location?.address || "",
-          locality: r.location?.locality || "",
-          city: r.location?.city || "",
-          latitude: r.location?.latitude ? Number(r.location.latitude) : 0,
-          longitude: r.location?.longitude ? Number(r.location.longitude) : 0,
-          zipcode: r.location?.zipcode || "",
-          country_id: r.location?.country_id || 0,
+          type: "Point",
+          coordinates: [
+            r.location?.longitude ? Number(r.location.longitude) : 0,
+            r.location?.latitude ? Number(r.location.latitude) : 0
+          ]
         },
+        address: r.location?.address || "",
+        locality: r.location?.locality || "",
+        city: r.location?.city || "",
+        zipcode: r.location?.zipcode || "",
+        country_id: r.location?.country_id || 0,
         cuisines: r.cuisines ? r.cuisines.split(",").map(c => c.trim()) : [],
         average_cost_for_two: r.average_cost_for_two ? Number(r.average_cost_for_two) : 0,
         price_range: r.price_range ? Number(r.price_range) : 0,
@@ -78,15 +81,21 @@ async function loadData() {
         highlights: r.establishment_types || [],
       }));
 
-      // Remove duplicates by checking existing restaurant_ids
+      // 🔹 Step 1: Deduplicate inside file itself
+      const uniqueData = [
+        ...new Map(formattedData.map(r => [r.restaurant_id, r])).values()
+      ];
+
+      // 🔹 Step 2: Remove those already in DB
       const existingIds = await Restaurant.find(
-        { restaurant_id: { $in: formattedData.map(r => r.restaurant_id) } },
+        { restaurant_id: { $in: uniqueData.map(r => r.restaurant_id) } },
         { restaurant_id: 1, _id: 0 }
       ).lean();
 
       const existingIdSet = new Set(existingIds.map(r => r.restaurant_id));
-      const filteredData = formattedData.filter(r => !existingIdSet.has(r.restaurant_id));
+      const filteredData = uniqueData.filter(r => !existingIdSet.has(r.restaurant_id));
 
+      // 🔹 Step 3: Insert remaining
       if (filteredData.length > 0) {
         try {
           await Restaurant.insertMany(filteredData, { ordered: false });
